@@ -1,11 +1,11 @@
 {
   "id": "cablevisionhd",
   "name": "CablevisionHD",
-  "version": "0.1.2",
-  "apiVersion": 6,
+  "version": "0.2.0",
+  "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
-  "description": "TV en vivo de CablevisionHD: unos 70 canales de deportes, entretenimiento, noticias, películas, infantil y educación, con búsqueda y varias opciones de señal por canal.",
+  "description": "TV en vivo de CablevisionHD: unos 70 canales de deportes, entretenimiento, noticias, películas, infantil y educación, con sección propia, categorías, búsqueda y varias opciones de señal por canal.",
   "author": "xuper-plugin",
   "homepage": "https://github.com/xuper-plugin/kino-plugin-cablevisionhd",
   "hosts": [
@@ -17,11 +17,93 @@
   "capabilities": [
     "channels",
     "home",
+    "browse",
+    "search",
+    "scopedSearch",
     "resolve"
   ],
   "liveStreamHosts": "any",
   "categories": [
     "live"
   ],
-  "color": "#E11D48"
+  "color": "#E11D48",
+  "section": {
+    "label": "TV en vivo",
+    "labelEn": "Live TV"
+  },
+  "theme": {
+    "accent": "#BE185D",
+    "onAccent": "#FFFFFF",
+    "background": "#12060C",
+    "surface": "#240D17",
+    "highlight": "#F9A8D4"
+  },
+  "settings": [
+    {
+      "key": "signalSection",
+      "type": "section",
+      "label": "Señal",
+      "labelEn": "Signal",
+      "hint": "Cada canal ofrece hasta tres opciones de señal; Kino abre la primera que funcione.",
+      "hintEn": "Each channel offers up to three signal options; Kino opens the first that works."
+    },
+    {
+      "key": "option",
+      "type": "select",
+      "label": "Opción preferida",
+      "labelEn": "Preferred option",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Automática",
+          "labelEn": "Automatic"
+        },
+        {
+          "value": "1",
+          "label": "Opción 1",
+          "labelEn": "Option 1"
+        },
+        {
+          "value": "2",
+          "label": "Opción 2",
+          "labelEn": "Option 2"
+        },
+        {
+          "value": "3",
+          "label": "Opción 3",
+          "labelEn": "Option 3"
+        }
+      ]
+    },
+    {
+      "key": "verify",
+      "type": "toggle",
+      "label": "Comprobar la señal antes de abrir",
+      "labelEn": "Check the signal before opening",
+      "default": true,
+      "hint": "Salta las opciones apagadas; tarda un poco más.",
+      "hintEn": "Skips options that are off air; takes a little longer."
+    },
+    {
+      "key": "info",
+      "type": "status",
+      "label": "Estado",
+      "labelEn": "Status"
+    },
+    {
+      "key": "check",
+      "type": "action",
+      "label": "Actualizar la parrilla",
+      "labelEn": "Refresh the grid"
+    },
+    {
+      "key": "clearCache",
+      "type": "action",
+      "label": "Vaciar caché",
+      "labelEn": "Clear cache",
+      "confirm": "¿Vaciar la lista de canales guardada?",
+      "confirmEn": "Clear the saved channel list?"
+    }
+  ]
 }

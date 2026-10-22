@@ -11,8 +11,8 @@ const CACHE_MS = 10 * 60 * 1000;
 const MAX_OPTIONS = 3;
 
 const TEXTS = {
-  es: { all: "Todos", sports: "Deportes", entertainment: "Entretenimiento", news: "Noticias", movies: "Películas", kids: "Infantil", education: "Educación", always: "24/7", option: "Opción", noStream: "Este canal no está disponible ahora. Prueba con otro.", siteDown: "No se pudo abrir la lista de canales." },
-  en: { all: "All", sports: "Sports", entertainment: "Entertainment", news: "News", movies: "Movies", kids: "Kids", education: "Education", always: "24/7", option: "Option", noStream: "This channel is not available right now. Try another one.", siteDown: "Could not open the channel list." },
+  es: { news2: "Novedades", heroText: "Canales de TV en vivo: deportes, entretenimiento, noticias y más.", statusOk: "{n} canales en la parrilla del sitio", statusBad: "No se pudo abrir la parrilla del sitio", cacheCleared: "Caché vaciada.", checked: "Comprobado: {n} canales.", all: "Todos", sports: "Deportes", entertainment: "Entretenimiento", news: "Noticias", movies: "Películas", kids: "Infantil", education: "Educación", always: "24/7", option: "Opción", noStream: "Este canal no está disponible ahora. Prueba con otro.", siteDown: "No se pudo abrir la lista de canales." },
+  en: { news2: "What's new", heroText: "Live TV channels: sports, entertainment, news and more.", statusOk: "{n} channels on the site's grid", statusBad: "Could not open the site's grid", cacheCleared: "Cache cleared.", checked: "Checked: {n} channels.", all: "All", sports: "Sports", entertainment: "Entertainment", news: "News", movies: "Movies", kids: "Kids", education: "Education", always: "24/7", option: "Option", noStream: "This channel is not available right now. Try another one.", siteDown: "Could not open the channel list." },
 };
 function t(key) {
   const lang = String(kino.lang || "").toLowerCase().startsWith("es") ? "es" : "en";
@@ -78,6 +78,11 @@ async function allChannels() {
   return list;
 }
 
+/** A value of Ajustes ▸ CablevisionHD, or `fallback` when the person has not set it. */
+function setting(key, fallback) {
+  try { const v = kino.config.get(key); return v === undefined || v === null ? fallback : v; } catch (_) { return fallback; }
+}
+
 const toChannel = (c, categoryId) => {
   const out = { id: c.id, title: c.title, ref: c.id };
   if (c.logo) out.logo = c.logo;
@@ -86,8 +91,6 @@ const toChannel = (c, categoryId) => {
 };
 
 // ---- exports ---------------------------------------------------------------------------------------------------
-
-export async function home() { return []; }
 
 export async function liveCategories() {
   return [{ id: "all", title: t("all") }, ...CATEGORIES.map((c) => ({ id: c.id, title: t(c.key), genre: c.genre }))];
@@ -103,6 +106,83 @@ export async function liveSearch({ query } = {}) {
   const q = fold(query);
   if (q.length < 2) return { items: [] };
   return { items: (await allChannels()).filter((c) => fold(c.title).includes(q)).map((c) => toChannel(c)) };
+}
+
+// ---- Home, section, categories and search: the same channels as live items ----
+
+const liveItem = (c) => { const it = { id: c.id, ref: c.id, title: c.title, kind: "live" }; if (c.logo) it.poster = c.logo; return it; };
+const inGroup = (list, groupId) => list.filter((c) => categoriesOf(c.title).includes(groupId));
+const GROUP = (id) => CATEGORIES.find((c) => c.id === id);
+/** The groups that have a channel today: a tab or a tile with nothing in it would only say so. */
+const usedGroups = (list) => CATEGORIES.filter((g) => inGroup(list, g.id).length);
+
+function rowOf(list, group) {
+  const items = inGroup(list, group.id).slice(0, 20).map(liveItem);
+  return items.length ? { id: group.id, title: t(group.key), items, ref: "cat:" + group.id, genre: group.genre } : null;
+}
+
+export async function home() {
+  const list = await allChannels();
+  return usedGroups(list).slice(0, 6).map((g) => rowOf(list, g)).filter(Boolean);
+}
+
+export async function browse(ref) {
+  const m = /^cat:([a-z]+)$/.exec(String(ref || ""));
+  const group = m && GROUP(m[1]);
+  if (!group) return { items: [] };
+  return { items: inGroup(await allChannels(), group.id).map(liveItem) };
+}
+
+export async function search(arg) {
+  const query = typeof arg === "string" ? { q: arg } : (arg || {});
+  const q = fold(query.q);
+  if (q.length < 2) return [];
+  let list = await allChannels();
+  if (query.within) {
+    const m = /^cat:([a-z]+)$/.exec(String(query.within));
+    if (!m || !GROUP(m[1])) return null; // Kino filters the page it already has
+    list = inGroup(list, m[1]);
+  }
+  return list.filter((c) => fold(c.title).includes(q)).slice(0, 60).map(liveItem);
+}
+
+export async function section({ tab } = {}) {
+  const list = await allChannels();
+  const groups = usedGroups(list);
+  const tabs = [{ id: "todos", label: t("all") }, ...groups.map((g) => ({ id: g.id, label: t(g.key) }))];
+  const chosen = tabs.some((x) => x.id === tab) ? tab : "todos";
+  const rows = (chosen === "todos" ? groups.map((g) => rowOf(list, g)) : [rowOf(list, GROUP(chosen))]).filter(Boolean);
+  const answer = { tabs, tab: chosen, rows };
+  const first = rows.flatMap((r) => r.items)[0];
+  if (first) { answer.hero = { title: first.title, text: t("heroText") }; if (first.poster) answer.hero.image = first.poster; }
+  return answer;
+}
+
+export async function categories() {
+  const list = await allChannels();
+  return usedGroups(list).map((g) => {
+    const first = inGroup(list, g.id)[0];
+    const tile = { id: "g-" + g.id, title: t(g.key), ref: "cat:" + g.id };
+    if (first && first.logo) tile.art = first.logo;
+    return tile;
+  });
+}
+
+// ---- Ajustes ▸ CablevisionHD ----
+
+export async function settingsStatus() {
+  try { return { info: t("statusOk").replace("{n}", String((await allChannels()).length)) }; } catch (_) { return { info: t("statusBad") }; }
+}
+
+export async function action(key) {
+  if (key === "clearCache") {
+    try { kino.storage.remove(CACHE_KEY); } catch (_) { /* nothing to clear */ }
+    return { message: t("cacheCleared") };
+  }
+  if (key === "check") {
+    try { kino.storage.remove(CACHE_KEY); return { message: t("checked").replace("{n}", String((await allChannels()).length)) }; } catch (_) { return { message: t("statusBad") }; }
+  }
+  return { message: "" };
 }
 
 // ---- resolve ---------------------------------------------------------------------------------------------------
@@ -147,10 +227,12 @@ async function streamFromOption(optionUrl, channelUrl, label) {
   // A channel that is off air still has a playlist address; it answers 404 (or a page). Looking first lets resolve move on to the
   // next option instead of handing the player a dead address. The playlist's host is the player's, which `kino.fetch` may not reach:
   // then the check is skipped and the player finds out.
-  try {
-    const r = await kino.fetch(url, { headers, timeoutMs: 8000 });
-    if (!r.ok || !String(await r.text()).includes("#EXTM3U")) return null;
-  } catch (_) { /* not reachable from here: trust it */ }
+  if (setting("verify", true) !== false) {
+    try {
+      const r = await kino.fetch(url, { headers, timeoutMs: 8000 });
+      if (!r.ok || !String(await r.text()).includes("#EXTM3U")) return null;
+    } catch (_) { /* not reachable from here: trust it */ }
+  }
   return { url, mime: HLS_MIME, headers, label };
 }
 
@@ -161,7 +243,11 @@ export async function resolve(ref) {
   const channelUrl = `${BASE}/${m[1]}.php`;
   const options = parseOptions(await fetchText(channelUrl, { Referer: BASE + "/parrilla-directo.php" })).slice(0, MAX_OPTIONS);
   if (!options.length) throw kino.error("not_found", "no options on " + channelUrl, { userMessage: t("noStream") });
-  const wanted = m[2] ? [Number(m[2]) - 1] : options.map((_, i) => i);
+  // Ajustes ▸ CablevisionHD: the signal option to try first (the others follow), unless the person asked for one in particular
+  const preferred = Number(setting("option", "auto"));
+  const order = options.map((_, i) => i);
+  if (preferred >= 1 && preferred <= options.length) order.unshift(...order.splice(preferred - 1, 1));
+  const wanted = m[2] ? [Number(m[2]) - 1] : order;
   const failures = [];
   for (const i of wanted) {
     if (!options[i]) continue;
