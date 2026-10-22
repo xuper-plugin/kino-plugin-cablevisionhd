@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- Fewer failures, from what GlitchTip showed (network, timeout and server-error events on real devices): the plugin goes straight to
+  `cablevisionhd.com` (the `www.` host only redirects to it), retries a server error or a network failure once, and **keeps the channel list
+  for a week** so a site that does not answer shows the last list instead of an error.
+  / Menos fallos: va directo a `cablevisionhd.com`, reintenta una vez y guarda la lista de canales una semana.
+- A channel opens faster when its first signal is slow or dead: the next option starts when the first fails or after 5 s, and a whole resolve is
+  bounded to 18 s (the app waits 20 s).
+  / Un canal abre más rápido: la siguiente opción arranca si la primera falla o tarda más de 5 s; todo el proceso se limita a 18 s.
+
 ## 0.2.0
 
 - Uses more of Kino's plugin API: **Home rows** of live channels per group (each with its logo and a "Ver más"), a **section of its own**

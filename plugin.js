@@ -2,12 +2,18 @@
 // The site lists its channels on one page (/parrilla-directo.php). A channel page offers up to three options; each option's
 // core.php answers a page with one iframe, and that player page names the HLS playlist in `var src = "...m3u8?token=..."`.
 
-const BASE = "https://www.cablevisionhd.com";
+// www. answers a 301 to this address on every request (one more hop, and one more host to reach), so the plugin goes straight to it.
+const BASE = "https://cablevisionhd.com";
 // The site answers a plain browser; the same User-Agent goes on every request of a resolve.
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0";
 const HLS_MIME = "application/x-mpegURL";
 const CACHE_KEY = "channels";
 const CACHE_MS = 10 * 60 * 1000;
+// The grid is kept this long as a fallback: when the site does not answer, the last list still shows instead of an error.
+const STALE_MS = 7 * 24 * 60 * 60 * 1000;
+// A resolve gives up after this long (the app waits 20 s), and starts the next option when the one before is slow.
+const RESOLVE_MS = 18000;
+const HEDGE_MS = 5000;
 const MAX_OPTIONS = 3;
 
 const TEXTS = {
@@ -60,22 +66,53 @@ function parseChannels(html) {
   return out;
 }
 
-async function fetchText(url, headers) {
-  const r = await kino.fetch(url, { headers: { "User-Agent": UA, ...(headers || {}) }, timeoutMs: 12000 });
-  if (!r.ok) throw kino.error("unavailable", "CablevisionHD " + r.status + " " + url);
-  return r.text();
+/**
+ * A page of the site. A server error, a throttle or a network failure is tried once more after a short wait; `deadline` (ms since epoch)
+ * bounds a whole resolve so the retries cannot run past it.
+ */
+async function fetchText(url, headers, { tries = 2, deadline } = {}) {
+  let last;
+  for (let n = 1; n <= tries; n++) {
+    const left = deadline ? deadline - Date.now() : 12000;
+    if (left < 1000) throw last || kino.error("timeout", "CablevisionHD: no time left for " + url);
+    try {
+      const r = await kino.fetch(url, { headers: { "User-Agent": UA, ...(headers || {}) }, timeoutMs: Math.min(8000, left) });
+      if (r.ok) return r.text();
+      last = kino.error("unavailable", "CablevisionHD " + r.status + " " + url, { userMessage: t("siteDown") });
+      if (r.status < 500 && r.status !== 429) throw last;
+    } catch (e) {
+      if (e === last || (e && e.code === "host_not_allowed")) throw e;
+      last = e;
+    }
+    if (n < tries) await kino.sleep(500);
+  }
+  throw last;
 }
 
-async function allChannels() {
+/** The kept channel list if it is younger than `maxAge` ms, else null. */
+function readChannels(maxAge) {
   try {
     const raw = kino.storage.get(CACHE_KEY);
     const e = raw ? JSON.parse(raw) : null;
-    if (e && Date.now() - e.at < CACHE_MS && Array.isArray(e.v) && e.v.length) return e.v;
+    if (e && Date.now() - e.at < maxAge && Array.isArray(e.v) && e.v.length) return e.v;
   } catch (_) { /* no cache */ }
-  const list = parseChannels(await fetchText(BASE + "/parrilla-directo.php", { Referer: BASE + "/" }));
-  if (!list.length) throw kino.error("unavailable", "CablevisionHD: no channels on the grid page", { userMessage: t("siteDown") });
-  try { kino.storage.set(CACHE_KEY, JSON.stringify({ at: Date.now(), v: list }), { ttlMs: CACHE_MS }); } catch (_) { /* the list is small; a full storage only costs a refetch */ }
-  return list;
+  return null;
+}
+
+async function allChannels() {
+  const fresh = readChannels(CACHE_MS);
+  if (fresh) return fresh;
+  try {
+    const list = parseChannels(await fetchText(BASE + "/parrilla-directo.php", { Referer: BASE + "/" }));
+    if (!list.length) throw kino.error("unavailable", "CablevisionHD: no channels on the grid page", { userMessage: t("siteDown") });
+    try { kino.storage.set(CACHE_KEY, JSON.stringify({ at: Date.now(), v: list }), { ttlMs: STALE_MS }); } catch (_) { /* the list is small; a full storage only costs a refetch */ }
+    return list;
+  } catch (e) {
+    const stale = readChannels(STALE_MS);
+    if (!stale) throw e;
+    kino.log("grid unavailable, showing the list kept before: " + ((e && e.message) || e));
+    return stale;
+  }
 }
 
 /** A value of Ajustes ▸ CablevisionHD, or `fallback` when the person has not set it. */
@@ -215,11 +252,11 @@ function parsePlaylist(html) {
   return null;
 }
 
-async function streamFromOption(optionUrl, channelUrl, label) {
-  const core = await fetchText(optionUrl, { Referer: channelUrl });
+async function streamFromOption(optionUrl, channelUrl, label, deadline) {
+  const core = await fetchText(optionUrl, { Referer: channelUrl }, { tries: 1, deadline });
   const iframe = parseIframe(core);
   if (!iframe) return null;
-  const player = await fetchText(iframe, { Referer: BASE + "/" });
+  const player = await fetchText(iframe, { Referer: BASE + "/" }, { tries: 1, deadline });
   const url = parsePlaylist(player);
   if (!url || !/^https?:\/\//i.test(url)) return null;
   const origin = /^https?:\/\/[^/]+/.exec(iframe)[0];
@@ -229,40 +266,64 @@ async function streamFromOption(optionUrl, channelUrl, label) {
   // then the check is skipped and the player finds out.
   if (setting("verify", true) !== false) {
     try {
-      const r = await kino.fetch(url, { headers, timeoutMs: 8000 });
+      const r = await kino.fetch(url, { headers, timeoutMs: Math.max(1000, Math.min(5000, deadline - Date.now())) });
       if (!r.ok || !String(await r.text()).includes("#EXTM3U")) return null;
     } catch (_) { /* not reachable from here: trust it */ }
   }
   return { url, mime: HLS_MIME, headers, label };
 }
 
+/**
+ * Tries the options in `order` through `run(i)` (a stream or null; a throw counts as a failure). The first starts at once and each next one
+ * starts when the one before fails or after HEDGE_MS, so a slow option does not hold up a good one. Answers `{ stream, i }` for the first that
+ * opens, or `{ failures }`.
+ */
+function firstOpening(order, run) {
+  return new Promise((resolve) => {
+    let next = 0, pending = 0, done = false;
+    const failures = [];
+    const launch = () => {
+      if (done || next >= order.length) return false;
+      const i = order[next++];
+      pending++;
+      run(i).then(
+        (stream) => { if (stream) { if (!done) { done = true; resolve({ stream, i }); } } else failures.push(`option ${i + 1}: no playlist`); },
+        (e) => { failures.push(`option ${i + 1}: ${(e && e.message) || e}`); },
+      ).then(() => {
+        pending--;
+        if (!done && !launch() && pending === 0) { done = true; resolve({ failures }); }
+      });
+      return true;
+    };
+    launch();
+    (async () => {
+      while (!done && next < order.length) { await kino.sleep(HEDGE_MS); if (!done) launch(); }
+    })();
+  });
+}
+
 /** `ref` is a channel id ("tudn-ver"), or "<id>|<n>" for the n-th option of that channel. */
 export async function resolve(ref) {
   const m = /^([a-z0-9-]+-ver)(?:\|([1-9]))?$/i.exec(String(ref || ""));
   if (!m) throw kino.error("not_found", "unknown ref: " + ref);
+  const deadline = Date.now() + RESOLVE_MS;
   const channelUrl = `${BASE}/${m[1]}.php`;
-  const options = parseOptions(await fetchText(channelUrl, { Referer: BASE + "/parrilla-directo.php" })).slice(0, MAX_OPTIONS);
+  const options = parseOptions(await fetchText(channelUrl, { Referer: BASE + "/parrilla-directo.php" }, { deadline })).slice(0, MAX_OPTIONS);
   if (!options.length) throw kino.error("not_found", "no options on " + channelUrl, { userMessage: t("noStream") });
   // Ajustes ▸ CablevisionHD: the signal option to try first (the others follow), unless the person asked for one in particular
   const preferred = Number(setting("option", "auto"));
   const order = options.map((_, i) => i);
   if (preferred >= 1 && preferred <= options.length) order.unshift(...order.splice(preferred - 1, 1));
-  const wanted = m[2] ? [Number(m[2]) - 1] : order;
-  const failures = [];
-  for (const i of wanted) {
-    if (!options[i]) continue;
-    try {
-      const stream = await streamFromOption(options[i], channelUrl, `${t("option")} ${i + 1}`);
-      if (!stream) { failures.push(`option ${i + 1}: no playlist`); continue; }
-      if (!m[2]) {
-        const others = options.map((_, j) => j).filter((j) => j !== i);
-        if (others.length) stream.alternatives = others.map((j) => ({ ref: `${m[1]}|${j + 1}`, label: `${t("option")} ${j + 1}` }));
-      }
-      return stream;
-    } catch (e) {
-      failures.push(`option ${i + 1}: ${(e && e.message) || e}`);
+  const wanted = m[2] ? [Number(m[2]) - 1].filter((i) => options[i]) : order;
+  const out = await firstOpening(wanted, (i) => streamFromOption(options[i], channelUrl, `${t("option")} ${i + 1}`, deadline));
+  if (out.stream) {
+    const { stream, i } = out;
+    if (!m[2]) {
+      const others = options.map((_, j) => j).filter((j) => j !== i);
+      if (others.length) stream.alternatives = others.map((j) => ({ ref: `${m[1]}|${j + 1}`, label: `${t("option")} ${j + 1}` }));
     }
+    return stream;
   }
-  kino.log("resolve " + m[1] + " failed: " + failures.join("; "));
+  kino.log("resolve " + m[1] + " failed: " + (out.failures || []).join("; "));
   throw kino.error("not_found", "no playable option for " + m[1], { userMessage: t("noStream") });
 }

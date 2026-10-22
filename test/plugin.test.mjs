@@ -22,6 +22,7 @@ globalThis.kino = {
     return { ok: status < 400, status, text: () => p.body, json: () => JSON.parse(p.body) };
   },
   storage: { get: (k) => store.get(k) ?? null, set: (k, v) => store.set(k, String(v)), keys: () => [...store.keys()], remove: (k) => store.delete(k) },
+  sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 15))),
   log: (...a) => logs.push(a.join(" ")),
   error: (code, message, opts = {}) => Object.assign(new Error(message), { code, ...opts }),
 };
@@ -29,7 +30,7 @@ const plugin = await import("../plugin.js");
 
 beforeEach(() => { calls.length = 0; pages = {}; logs = []; store = new Map(); lang = "es"; cfg = {}; });
 
-const BASE = "https://www.cablevisionhd.com";
+const BASE = "https://cablevisionhd.com";
 const card = (slug, title, img = "imge/x.webp") => `<a href="${BASE}/${slug}.php" class="channel-card"> <div class="live"><span class="live-dot"></span>EN VIVO</div> <img src="${img}" alt="${title}"> <p>${title}</p> </a>`;
 const GRID = `<html><body>
 <a href="${BASE}/redes/" target="_blank" class="channel-card"> <img src="imge/tvenvivo.webp"> <p>Mundo Latam 🌐</p> </a>
@@ -264,4 +265,39 @@ test("settings: the status line counts the channels of the grid, says so when th
   assert.match((await plugin.action("check")).message, /Comprobado: 8 canales/);
   pages = {}; store = new Map();
   assert.match((await plugin.settingsStatus()).info, /No se pudo abrir la parrilla/);
+});
+
+test("the grid: a server error is retried once, and a site that stays down shows the list kept before", async () => {
+  install();
+  let n = 0;
+  const real = kino.fetch;
+  kino.fetch = async (url, opts) => { if (url === BASE + "/parrilla-directo.php") { n++; return n === 1 ? { ok: false, status: 503, text: () => "" } : real(url, opts); } return real(url, opts); };
+  const first = (await plugin.liveChannels({})).items;
+  assert.ok(first.length > 0);
+  assert.equal(n, 2, "one retry after the 503");
+  // the site goes away and the fresh copy is old: the kept list answers
+  const e = JSON.parse(store.get("channels")); e.at = Date.now() - 60 * 60 * 1000; store.set("channels", JSON.stringify(e));
+  kino.fetch = async () => { throw Object.assign(new Error("net"), { code: "network" }); };
+  const again = (await plugin.liveChannels({})).items;
+  assert.equal(again.length, first.length);
+  assert.ok(logs.some((l) => l.includes("kept before")));
+  kino.fetch = real;
+});
+
+test("the grid: a site that stays down and nothing kept is an error", async () => {
+  const real = kino.fetch;
+  kino.fetch = async () => { throw Object.assign(new Error("net"), { code: "network" }); };
+  await assert.rejects(() => plugin.liveChannels({}));
+  kino.fetch = real;
+});
+
+test("resolve: a slow first option does not hold up a good second one", async () => {
+  installChannel("lento-ver", "lento", "p.example.test", 2);
+  const real = kino.fetch;
+  kino.fetch = async (url, opts) => { if (url === `${BASE}/stream/core.php?canal=lento`) await new Promise((r) => setTimeout(r, 400)); return real(url, opts); };
+  const t0 = Date.now();
+  const stream = await plugin.resolve("lento-ver");
+  assert.ok(stream.url.includes("/playlist/2/"), stream.url);
+  assert.ok(Date.now() - t0 < 300, "did not wait for the slow option");
+  kino.fetch = real;
 });
