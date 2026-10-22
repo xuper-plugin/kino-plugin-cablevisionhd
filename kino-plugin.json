@@ -1,11 +1,13 @@
 {
   "id": "cablevisionhd",
   "name": "CablevisionHD",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "apiVersion": 6,
   "entry": "plugin.js",
-  "description": "Canales de TV en vivo de cablevisionhd.com: deportes, entretenimiento, noticias, películas, infantil y más.",
+  "icon": "icon.png",
+  "description": "TV en vivo de CablevisionHD: unos 70 canales de deportes, entretenimiento, noticias, películas, infantil y educación, con búsqueda y varias opciones de señal por canal.",
   "author": "xuper-plugin",
+  "homepage": "https://github.com/xuper-plugin/kino-plugin-cablevisionhd",
   "hosts": [
     "cablevisionhd.com",
     "www.cablevisionhd.com",
@@ -21,6 +23,5 @@
   "categories": [
     "live"
   ],
-  "color": "#E11D48",
-  "discoverable": false
+  "color": "#E11D48"
 }
