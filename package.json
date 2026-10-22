@@ -1,0 +1,9 @@
+{
+  "name": "kino-plugin-cablevisionhd",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "validate": "node sdk/validate.mjs . --repo xuper-plugin/kino-plugin-cablevisionhd"
+  }
+}

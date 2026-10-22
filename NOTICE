@@ -1,0 +1,3 @@
+Kino plugin "CablevisionHD". Site behaviour (the channel list, the stream pages and the player's playlist address) was
+read from the live site and from the CloudStream provider "CablevisionHdProvider" in redblacker8/storm-ext (a fork of
+Stormunblessed/storm-ext); no code was copied from it.

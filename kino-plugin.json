@@ -1,0 +1,26 @@
+{
+  "id": "cablevisionhd",
+  "name": "CablevisionHD",
+  "version": "0.1.0",
+  "apiVersion": 6,
+  "entry": "plugin.js",
+  "description": "Canales de TV en vivo de cablevisionhd.com: deportes, entretenimiento, noticias, películas, infantil y más.",
+  "author": "xuper-plugin",
+  "hosts": [
+    "cablevisionhd.com",
+    "www.cablevisionhd.com",
+    "deportes.ksdjugfssddeports.com",
+    "regionales.saohgdassregions.com"
+  ],
+  "capabilities": [
+    "channels",
+    "home",
+    "resolve"
+  ],
+  "liveStreamHosts": "any",
+  "categories": [
+    "live"
+  ],
+  "color": "#E11D48",
+  "discoverable": false
+}
