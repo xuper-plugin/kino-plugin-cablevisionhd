@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Icon: the site's own CablevisionHD logo on black, with a rose line.
+  / Icono: el logo de CablevisionHD del sitio sobre negro, con una línea rosa.
+
 ## 0.1.1
 
 - Icon, description and homepage; the plugin now appears in the community search (topic `kino-plugin`).
