@@ -1,7 +1,7 @@
 {
   "id": "cablevisionhd",
   "name": "CablevisionHD",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -105,5 +105,6 @@
       "confirm": "¿Vaciar la lista de canales guardada?",
       "confirmEn": "Clear the saved channel list?"
     }
-  ]
+  ],
+  "telemetry": true
 }

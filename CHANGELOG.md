@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Diagnostic sharing (`telemetry`): with the person's consent, failed calls send their log lines to Kino's error log, so the next site change shows up sooner.
+  / Registros de diagnóstico (`telemetry`): con permiso de la persona, las llamadas que fallan envían sus líneas al registro de errores de Kino.
+
 ## 0.3.0
 
 - Fewer failures, from what GlitchTip showed (network, timeout and server-error events on real devices): the plugin goes straight to
