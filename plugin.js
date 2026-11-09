@@ -3,6 +3,13 @@
 // core.php answers a page with one iframe, and that player page names the HLS playlist in `var src = "...m3u8?token=..."`.
 
 // www. answers a 301 to this address on every request (one more hop, and one more host to reach), so the plugin goes straight to it.
+
+// Kino waits for every request a call left running before it delivers the call's answer (quickjs-kt joins the pending async work), so a Home that
+// gave up on a slow row at its own budget was still held until that row's request ended, or retried: measured on users' devices Home ran 21-34 s
+// with rows logged as "skipped: its source did not answer in time", and Kino threw the whole answer away at 20 s. Asking Kino to drop what a call
+// leaves running (the prelude reads this flag after every call; Kino 0.9.55 and later, an older one ignores it) lets the answer leave at the budget.
+globalThis.__kinoDropPendingFetches = true;
+
 const BASE = "https://cablevisionhd.com";
 // The site answers a plain browser; the same User-Agent goes on every request of a resolve.
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0";
