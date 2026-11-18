@@ -263,7 +263,10 @@ async function streamFromOption(optionUrl, channelUrl, label, deadline) {
   const core = await fetchText(optionUrl, { Referer: channelUrl }, { tries: 1, deadline });
   const iframe = parseIframe(core);
   if (!iframe) return null;
-  const player = await fetchText(iframe, { Referer: BASE + "/" }, { tries: 1, deadline });
+  // The player host checks who embeds it: the "deportes" signals accept any cablevisionhd.com page, but the "regionales" ones
+  // (entertainment, news, movies, kids) answer "Embedding domain not allowed" unless the Referer is the exact core.php page that
+  // holds the iframe. Send that page (optionUrl, the www core.php URL) — what a browser sends — so both signal hosts play.
+  const player = await fetchText(iframe, { Referer: optionUrl }, { tries: 1, deadline });
   const url = parsePlaylist(player);
   if (!url || !/^https?:\/\//i.test(url)) return null;
   const origin = /^https?:\/\/[^/]+/.exec(iframe)[0];

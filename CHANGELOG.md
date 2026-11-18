@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- Entertainment, news, movie and kids channels play again. Their signal host (`regionales.*`) answers "Embedding domain not allowed" unless the player is fetched with the exact `core.php` page that embeds it as the `Referer`; the plugin was sending the site's home page, so only the sports host (`deportes.*`, lenient) resolved. It now sends the embedding page, the Referer a browser sends, and both signal hosts play.
+  / Vuelven a reproducir los canales de entretenimiento, noticias, películas e infantil: su servidor de señal (`regionales.*`) exigía como `Referer` la página `core.php` que embebe el reproductor; el plugin mandaba la portada del sitio, así que solo resolvía el host de deportes.
+
 ## 0.3.2
 
 - Home (and every call) leaves at its own budget: Kino waits for every request a call left running before it delivers the answer, so a Home that skipped a slow row was still held until that request ended or retried (measured on users' devices: Home ran 21-34 s with rows logged as skipped, and Kino threw the answer away at 20 s). The plugin now asks Kino to drop what a call leaves running (`globalThis.__kinoDropPendingFetches = true`, read by Kino 0.9.55 and later; an older Kino ignores it), with a test (`test/dropFetches.test.mjs`).
