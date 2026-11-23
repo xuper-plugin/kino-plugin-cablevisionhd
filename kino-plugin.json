@@ -1,7 +1,7 @@
 {
   "id": "cablevisionhd",
   "name": "CablevisionHD",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -23,6 +23,7 @@
     "resolve"
   ],
   "liveStreamHosts": "any",
+  "streamHosts": "any",
   "categories": [
     "live"
   ],
