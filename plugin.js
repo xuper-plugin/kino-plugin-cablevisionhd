@@ -1,13 +1,16 @@
 // src/i18n.js
 var TEXTS = {
-  es: { news2: "Novedades", heroText: "Canales de TV en vivo: deportes, entretenimiento, noticias y m\xE1s.", statusOk: "{n} canales en la parrilla del sitio", statusBad: "No se pudo abrir la parrilla del sitio", cacheCleared: "Cach\xE9 vaciada.", checked: "Comprobado: {n} canales.", all: "Todos", sports: "Deportes", entertainment: "Entretenimiento", news: "Noticias", movies: "Pel\xEDculas", kids: "Infantil", education: "Educaci\xF3n", always: "24/7", option: "Opci\xF3n", noStream: "Este canal no est\xE1 disponible ahora. Prueba con otro.", siteDown: "No se pudo abrir la lista de canales." },
-  en: { news2: "What's new", heroText: "Live TV channels: sports, entertainment, news and more.", statusOk: "{n} channels on the site's grid", statusBad: "Could not open the site's grid", cacheCleared: "Cache cleared.", checked: "Checked: {n} channels.", all: "All", sports: "Sports", entertainment: "Entertainment", news: "News", movies: "Movies", kids: "Kids", education: "Education", always: "24/7", option: "Option", noStream: "This channel is not available right now. Try another one.", siteDown: "Could not open the channel list." }
+  es: { news2: "Novedades", heroText: "Canales de TV en vivo: deportes, entretenimiento, noticias y m\xE1s.", statusOk: "{n} canales en la parrilla del sitio", statusBad: "No se pudo abrir la parrilla del sitio", cacheCleared: "Cach\xE9 vaciada.", checked: "Comprobado: {n} canales.", all: "Todos", sports: "Deportes", entertainment: "Entretenimiento", news: "Noticias", movies: "Pel\xEDculas", kids: "Infantil", education: "Educaci\xF3n", always: "24/7", option: "Opci\xF3n", noStream: "Este canal no est\xE1 disponible ahora. Prueba con otro.", siteDown: "No se pudo abrir la lista de canales.", title: "CablevisionHD", search: "Buscar", searchHint: "Buscar canal", settings: "Ajustes", back: "Atr\xE1s", retry: "Reintentar", empty: "No hay canales en este grupo.", noResults: "Sin resultados.", refresh: "Actualizar la parrilla", clear: "Vaciar cach\xE9", signalTitle: "Se\xF1al" },
+  en: { news2: "What's new", heroText: "Live TV channels: sports, entertainment, news and more.", statusOk: "{n} channels on the site's grid", statusBad: "Could not open the site's grid", cacheCleared: "Cache cleared.", checked: "Checked: {n} channels.", all: "All", sports: "Sports", entertainment: "Entertainment", news: "News", movies: "Movies", kids: "Kids", education: "Education", always: "24/7", option: "Option", noStream: "This channel is not available right now. Try another one.", siteDown: "Could not open the channel list.", title: "CablevisionHD", search: "Search", searchHint: "Search channel", settings: "Settings", back: "Back", retry: "Retry", empty: "No channels in this group.", noResults: "No results.", refresh: "Refresh the grid", clear: "Clear cache", signalTitle: "Signal" }
 };
 var pick = (lang) => String(lang || "").toLowerCase().startsWith("es") ? "es" : "en";
 var sub = (s, vars) => vars ? Object.keys(vars).reduce((a, k) => a.split("{" + k + "}").join(String(vars[k])), s) : s;
 var raw = (lang, key) => TEXTS[lang][key] || TEXTS.es[key] || key;
 function t(key, vars) {
   return sub(raw(pick(kino.lang), key), vars);
+}
+function twin(key, prop = "label", vars) {
+  return { [prop]: sub(raw("es", key), vars), [prop + "En"]: sub(raw("en", key), vars) };
 }
 
 // src/site.js
@@ -307,6 +310,163 @@ async function resolve(ref) {
   throw kino.error("not_found", "no playable option for " + m[1], { userMessage: t("noStream") });
 }
 
+// src/ui.js
+var ROUTES = ["main", "search", "settings"];
+var GRID_CAP = 120;
+function channelCard(c) {
+  const out = { id: c.id, ref: c.id, title: c.title, kind: "live" };
+  if (c.logo) out.poster = c.logo;
+  return out;
+}
+function roundChannel(c) {
+  return {
+    type: "Column",
+    key: "ch-" + c.id,
+    w: 120,
+    gap: 8,
+    crossAxisAlignment: "center",
+    onTap: { go: { play: { ref: c.id, kind: "live", id: c.id, title: c.title } } },
+    children: [
+      { type: "CircleAvatar", key: "chl-" + c.id, radius: 44, ...c.logo ? { image: c.logo } : { text: String(c.title).slice(0, 2).toUpperCase() }, labelText: c.title, labelTextEn: c.title },
+      { type: "Text", text: c.title, textEn: c.title, style: "caption", maxLines: 1, textAlign: "center" }
+    ]
+  };
+}
+function tabsOf(list) {
+  return [{ id: "all", ...twin("all") }, ...usedGroups(list).map((g) => ({ id: g.id, ...twin(g.key) }))];
+}
+function channelsInTab(list, tab) {
+  return !tab || tab === "all" ? list : inGroup(list, tab);
+}
+var brand = () => ({ type: "Text", key: "brand", text: t("title"), textEn: "CablevisionHD", style: "h4" });
+var barBtn = (key, icon, labelKey, onPressed) => ({ type: "IconButton", key, icon, ...twin(labelKey, "labelText"), ...twin(labelKey, "tooltip"), onPressed });
+var tabBar = (active, tabs) => ({ type: "TabBar", key: "tabs", divider: false, value: active, onChanged: "tab", tabs: tabs.map((x) => ({ value: x.id, label: x.label, labelEn: x.labelEn })) });
+var scroll = (key, children) => ({ type: "SingleChildScrollView", key, children: [{ type: "Column", padding: { compact: 12, expanded: 24 }, gap: 16, children }] });
+var backBar = (titleKey) => ({ type: "AppBar", mergeWithKinoBar: true, dense: true, divider: false, leading: barBtn("back", "arrow_back", "back", { event: "go", arg: "main" }), ...twin(titleKey, "title") });
+function mainView({ list, tab, device }) {
+  const tv = device === "tv";
+  const tabs = tabsOf(list);
+  const active = tabs.some((x) => x.id === tab) ? tab : "all";
+  const channels = channelsInTab(list, active);
+  const body = channels.length === 0 ? { type: "Text", ...twin("empty", "text"), color: "muted" } : tv ? { type: "Row", key: "channels", wrap: true, gap: 24, children: channels.slice(0, GRID_CAP).map(roundChannel) } : { type: "titleGrid", key: "grid-" + active, columns: { compact: 3, expanded: 6 }, items: channels.slice(0, GRID_CAP).map(channelCard) };
+  return {
+    type: "Scaffold",
+    appBar: {
+      type: "AppBar",
+      mergeWithKinoBar: true,
+      dense: true,
+      divider: false,
+      title: brand(),
+      actions: [barBtn("searchBtn", "search", "search", { event: "go", arg: "search" }), barBtn("settingsBtn", "settings", "settings", { event: "go", arg: "settings" })]
+    },
+    body: {
+      type: "Column",
+      key: "page",
+      children: [
+        { type: "Column", key: "tabsRow", padding: { compact: 0, expanded: 24 }, children: [tabBar(active, tabs)] },
+        { type: "SingleChildScrollView", key: "browse-" + active, flex: 1, children: [{ type: "Column", padding: { compact: 12, expanded: 24 }, gap: 16, children: [body] }] }
+      ]
+    }
+  };
+}
+function searchView({ list, query, device }) {
+  const q = fold(query || "");
+  const results = q.length >= 2 ? list.filter((c) => fold(c.title).includes(q)).slice(0, GRID_CAP) : [];
+  const tv = device === "tv";
+  const body = [
+    {
+      type: "Form",
+      key: "searchForm",
+      onSubmitted: "q",
+      gap: 8,
+      children: [{ type: "TextField", key: "q", kind: "text", value: query || "", ...twin("searchHint", "labelText"), maxLength: 80, autofocus: true, onSubmitted: "q" }]
+    }
+  ];
+  if (q.length >= 2) {
+    if (results.length === 0) body.push({ type: "Text", ...twin("noResults", "text"), color: "muted" });
+    else if (tv) body.push({ type: "Row", key: "results", wrap: true, gap: 24, children: results.map(roundChannel) });
+    else body.push({ type: "titleGrid", key: "results", columns: { compact: 3, expanded: 6 }, items: results.map(channelCard) });
+  }
+  return { type: "Scaffold", appBar: backBar("search"), body: scroll("search-page", body) };
+}
+function settingsView({ info, device }) {
+  return {
+    type: "Scaffold",
+    appBar: backBar("settings"),
+    body: scroll("settings-page", [
+      { type: "Card", key: "signalCard", children: [
+        { type: "Text", ...twin("signalTitle", "text"), style: "h4" },
+        { type: "settings", key: "signalForm", keys: ["option", "verify"], autoSave: true, onSaved: "saved" }
+      ] },
+      { type: "Card", key: "gridCard", children: [
+        { type: "Row", key: "gridButtons", wrap: true, gap: 8, children: [
+          { type: "ElevatedButton", key: "refresh", ...twin("refresh", "labelText"), icon: "refresh", onPressed: "check" },
+          { type: "Button", variant: "secondary", key: "clear", ...twin("clear", "labelText"), icon: "delete", onPressed: "clearCache" }
+        ] },
+        { type: "Text", text: info || "", textEn: info || "", style: "caption", color: "muted" }
+      ] }
+    ])
+  };
+}
+function errorView() {
+  return {
+    type: "Scaffold",
+    appBar: { type: "AppBar", mergeWithKinoBar: true, dense: true, divider: false, title: brand() },
+    body: scroll("error-page", [
+      { type: "MaterialBanner", key: "loadFailed", role: "error", ...twin("siteDown"), action: { ...twin("retry", "label"), onTap: "retry" } }
+    ])
+  };
+}
+async function screen(ctx) {
+  const c = ctx && typeof ctx === "object" ? ctx : {};
+  const state = c.state && typeof c.state === "object" ? c.state : {};
+  const name = c.route && ROUTES.includes(c.route.name) ? c.route.name : "main";
+  try {
+    if (name === "settings") {
+      const s = await settingsStatus();
+      return settingsView({ info: s.info, device: c.device });
+    }
+    const list = await allChannels();
+    if (name === "search") return searchView({ list, query: typeof state.q === "string" ? state.q : "", device: c.device });
+    return mainView({ list, tab: typeof state.tab === "string" ? state.tab : "all", device: c.device });
+  } catch (_) {
+    return errorView();
+  }
+}
+var bump = (state) => ({ n: (state.n || 0) + 1 });
+var events = {
+  tab({ value, state }) {
+    return { state: { ...state, tab: typeof value === "string" ? value : "all", ...bump(state) } };
+  },
+  q({ value, state }) {
+    return { state: { ...state, q: typeof value === "string" ? value : "", ...bump(state) } };
+  },
+  retry({ state }) {
+    return { state: { ...state, ...bump(state) } };
+  },
+  async check({ state }) {
+    const r = await action("check");
+    return { toast: { text: r.message }, state: { ...state, ...bump(state) } };
+  },
+  async clearCache({ state }) {
+    const r = await action("clearCache");
+    return { toast: { text: r.message }, state: { ...state, ...bump(state) } };
+  },
+  saved({ state }) {
+    return { state: { ...state, ...bump(state) } };
+  }
+};
+async function screenEvent(ev) {
+  const e = ev && typeof ev === "object" ? ev : {};
+  const handler = Object.hasOwn(events, e.name) ? events[e.name] : null;
+  if (!handler) return null;
+  try {
+    return await handler({ ...e, state: e.state && typeof e.state === "object" ? e.state : {} }) ?? null;
+  } catch (_) {
+    return { toast: { text: t("siteDown"), role: "error" } };
+  }
+}
+
 // src/plugin.js
 globalThis.__kinoDropPendingFetches = true;
 export {
@@ -318,6 +478,8 @@ export {
   liveChannels,
   liveSearch,
   resolve,
+  screen,
+  screenEvent,
   search,
   section,
   settingsStatus
