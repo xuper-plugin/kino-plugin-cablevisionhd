@@ -1,7 +1,7 @@
 // src/i18n.js
 var TEXTS = {
-  es: { news2: "Novedades", heroText: "Canales de TV en vivo: deportes, entretenimiento, noticias y m\xE1s.", statusOk: "{n} canales en la parrilla del sitio", statusBad: "No se pudo abrir la parrilla del sitio", cacheCleared: "Cach\xE9 vaciada.", checked: "Comprobado: {n} canales.", all: "Todos", sports: "Deportes", entertainment: "Entretenimiento", news: "Noticias", movies: "Pel\xEDculas", kids: "Infantil", education: "Educaci\xF3n", always: "24/7", option: "Opci\xF3n", noStream: "Este canal no est\xE1 disponible ahora. Prueba con otro.", siteDown: "No se pudo abrir la lista de canales.", title: "CablevisionHD", search: "Buscar", searchHint: "Buscar canal", settings: "Ajustes", back: "Atr\xE1s", retry: "Reintentar", empty: "No hay canales en este grupo.", noResults: "Sin resultados.", refresh: "Actualizar la parrilla", clear: "Vaciar cach\xE9", signalTitle: "Se\xF1al" },
-  en: { news2: "What's new", heroText: "Live TV channels: sports, entertainment, news and more.", statusOk: "{n} channels on the site's grid", statusBad: "Could not open the site's grid", cacheCleared: "Cache cleared.", checked: "Checked: {n} channels.", all: "All", sports: "Sports", entertainment: "Entertainment", news: "News", movies: "Movies", kids: "Kids", education: "Education", always: "24/7", option: "Option", noStream: "This channel is not available right now. Try another one.", siteDown: "Could not open the channel list.", title: "CablevisionHD", search: "Search", searchHint: "Search channel", settings: "Settings", back: "Back", retry: "Retry", empty: "No channels in this group.", noResults: "No results.", refresh: "Refresh the grid", clear: "Clear cache", signalTitle: "Signal" }
+  es: { news2: "Novedades", heroText: "Canales de TV en vivo: deportes, entretenimiento, noticias y m\xE1s.", statusOk: "{n} canales en la parrilla del sitio", statusBad: "No se pudo abrir la parrilla del sitio", cacheCleared: "Cach\xE9 vaciada.", checked: "Comprobado: {n} canales.", all: "Todos", sports: "Deportes", entertainment: "Entretenimiento", news: "Noticias", movies: "Pel\xEDculas", kids: "Infantil", education: "Educaci\xF3n", always: "24/7", option: "Opci\xF3n", noStream: "Este canal no est\xE1 disponible ahora. Prueba con otro.", siteDown: "No se pudo abrir la lista de canales.", title: "CablevisionHD", search: "Buscar", searchHint: "Buscar canal", settings: "Ajustes", back: "Atr\xE1s", close: "Cerrar", retry: "Reintentar", empty: "No hay canales en este grupo.", noResults: "Sin resultados.", refresh: "Actualizar la parrilla", clear: "Vaciar cach\xE9", signalTitle: "Se\xF1al", more: "Mostrando los primeros {n}; abre un grupo para ver el resto." },
+  en: { news2: "What's new", heroText: "Live TV channels: sports, entertainment, news and more.", statusOk: "{n} channels on the site's grid", statusBad: "Could not open the site's grid", cacheCleared: "Cache cleared.", checked: "Checked: {n} channels.", all: "All", sports: "Sports", entertainment: "Entertainment", news: "News", movies: "Movies", kids: "Kids", education: "Education", always: "24/7", option: "Option", noStream: "This channel is not available right now. Try another one.", siteDown: "Could not open the channel list.", title: "CablevisionHD", search: "Search", searchHint: "Search channel", settings: "Settings", back: "Back", close: "Close", retry: "Retry", empty: "No channels in this group.", noResults: "No results.", refresh: "Refresh the grid", clear: "Clear cache", signalTitle: "Signal", more: "Showing the first {n}; open a group to see the rest." }
 };
 var pick = (lang) => String(lang || "").toLowerCase().startsWith("es") ? "es" : "en";
 var sub = (s, vars) => vars ? Object.keys(vars).reduce((a, k) => a.split("{" + k + "}").join(String(vars[k])), s) : s;
@@ -266,7 +266,7 @@ async function resolve(ref) {
 
 // src/ui.js
 var ROUTES = ["main", "search", "settings"];
-var GRID_CAP = 120;
+var GRID_CAP = 60;
 function channelCard(c) {
   const out = { id: c.id, ref: c.id, title: c.title, kind: "live" };
   if (c.logo) out.poster = c.logo;
@@ -303,6 +303,8 @@ function mainView({ list, tab, device }) {
   const active = tabs.some((x) => x.id === tab) ? tab : "all";
   const channels = channelsInTab(list, active);
   const body = channels.length === 0 ? { type: "Text", ...twin("empty", "text"), color: "muted" } : tv ? { type: "Row", key: "channels", wrap: true, gap: 24, children: channels.slice(0, GRID_CAP).map(roundChannel) } : { type: "titleGrid", key: "grid-" + active, columns: { compact: 3, expanded: 6 }, items: channels.slice(0, GRID_CAP).map(channelCard) };
+  const content = [body];
+  if (channels.length > GRID_CAP) content.push({ type: "Text", ...twin("more", "text", { n: GRID_CAP }), style: "caption", color: "muted" });
   return {
     type: "Scaffold",
     appBar: {
@@ -310,6 +312,7 @@ function mainView({ list, tab, device }) {
       mergeWithKinoBar: true,
       dense: true,
       divider: false,
+      leading: barBtn("close", "close", "close", { go: { close: true } }),
       title: brand(),
       actions: [barBtn("searchBtn", "search", "search", { event: "go", arg: "search" }), barBtn("settingsBtn", "settings", "settings", { event: "go", arg: "settings" })]
     },
@@ -318,7 +321,7 @@ function mainView({ list, tab, device }) {
       key: "page",
       children: [
         { type: "Column", key: "tabsRow", padding: { compact: 0, expanded: 24 }, children: [tabBar(active, tabs)] },
-        { type: "SingleChildScrollView", key: "browse-" + active, flex: 1, children: [{ type: "Column", padding: { compact: 12, expanded: 24 }, gap: 16, children: [body] }] }
+        { type: "SingleChildScrollView", key: "browse-" + active, flex: 1, children: [{ type: "Column", padding: { compact: 12, expanded: 24 }, gap: 16, children: content }] }
       ]
     }
   };
@@ -365,9 +368,9 @@ function settingsView({ info, device }) {
 function errorView() {
   return {
     type: "Scaffold",
-    appBar: { type: "AppBar", mergeWithKinoBar: true, dense: true, divider: false, title: brand() },
+    appBar: { type: "AppBar", mergeWithKinoBar: true, dense: true, divider: false, leading: barBtn("close", "close", "close", { go: { close: true } }), title: brand() },
     body: scroll("error-page", [
-      { type: "MaterialBanner", key: "loadFailed", role: "error", ...twin("siteDown"), action: { ...twin("retry", "label"), onTap: "retry" } }
+      { type: "MaterialBanner", key: "loadFailed", role: "error", ...twin("siteDown", "text"), action: { ...twin("retry", "label"), onTap: "retry" } }
     ])
   };
 }
@@ -395,6 +398,13 @@ var events = {
   },
   q({ value, arg, state }) {
     return { state: { ...state, q: pickStr(value, arg), ...bump(state) } };
+  },
+  // Navigate between this screen's own routes: the app-bar buttons push "search"/"settings", the back button pops to "main".
+  go({ value, arg }) {
+    const to = pickStr(value, arg);
+    if (to === "search" || to === "settings") return { route: { push: to } };
+    if (to === "main") return { route: { pop: true } };
+    return null;
   },
   retry({ state }) {
     return { state: { ...state, ...bump(state) } };

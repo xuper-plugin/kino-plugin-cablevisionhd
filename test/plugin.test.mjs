@@ -75,6 +75,7 @@ test("the manifest declares the new-UI capabilities (channels, resolve, screen),
   for (const cap of ["channels", "resolve", "search", "screen"]) assert.ok(m.capabilities.includes(cap), cap);
   for (const gone of ["home", "browse", "scopedSearch"]) assert.ok(!m.capabilities.includes(gone), "dropped: " + gone);
   assert.ok(m.screen && m.screen.menuOpens === "screen" && m.screen.settingsIn === "screen");
+  assert.ok(m.apiVersion >= 19, "apiVersion >= 19 (mergeWithKinoBar floor), was " + m.apiVersion);
   assert.equal(m.version, "0.5.0");
   assert.equal(m.liveStreamHosts, "any");
   for (const h of ["www.cablevisionhd.org", "cablevisionhd.org", "deportes.ksdjugfssddeports.com", "regionales.saohgdassregions.com"]) assert.ok(m.hosts.includes(h), h);

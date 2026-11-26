@@ -2,7 +2,7 @@
   "id": "cablevisionhd",
   "name": "CablevisionHD",
   "version": "0.5.0",
-  "apiVersion": 14,
+  "apiVersion": 19,
   "entry": "plugin.js",
   "icon": "icon.png",
   "description": "TV en vivo de CablevisionHD: unos 70 canales de deportes, entretenimiento, noticias, películas, infantil y educación, con pantalla propia (pestañas por grupo, búsqueda y ajustes) y varias opciones de señal por canal.",

@@ -2,6 +2,12 @@
 // The plugin's own screen (screen/screenEvent) and its view builders, with a stub of `kino`.
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { checkScreenTree } from "../sdk/screen.mjs";
+
+const MANIFEST = JSON.parse(readFileSync(new URL("../kino-plugin.json", import.meta.url), "utf8"));
+// The real apiVersion-30 validator: which nodes/props Kino would drop from this tree. Empty = the tree renders as built.
+const drops = (tree) => checkScreenTree(tree, "es", undefined, { apiVersion: MANIFEST.apiVersion, settings: MANIFEST.settings }).dropped;
 
 let lang = "es";
 let cfg = {};
@@ -86,4 +92,28 @@ test("screenEvent: 'clearCache' clears the saved list via action()", async () =>
   const r = await ui.screenEvent({ name: "clearCache", state: {} });
   assert.equal(store.has("channels"), false);
   assert.ok(r && (r.toast || r.message || r.state));
+});
+
+test("screenEvent: 'go' navigates to the search/settings routes and back to main", async () => {
+  assert.deepEqual((await ui.screenEvent({ name: "go", arg: "search" })).route, { push: "search" });
+  assert.deepEqual((await ui.screenEvent({ name: "go", arg: "settings" })).route, { push: "settings" });
+  assert.deepEqual((await ui.screenEvent({ name: "go", arg: "main" })).route, { pop: true });
+});
+
+test("the real validator drops nothing from the main/search/settings/error trees (even with 65 channels)", async () => {
+  const list = Array.from({ length: 65 }, (_, i) => ({ id: `tudn-${i}-en-vivo`, title: `TUDN ${i}`, logo: "https://x/t.webp" }));
+  assert.deepEqual(drops(ui.mainView({ list, tab: "all", device: "phone" })), [], "main");
+  assert.deepEqual(drops(ui.searchView({ list, query: "tudn", device: "phone" })), [], "search");
+  assert.deepEqual(drops(ui.settingsView({ info: "20 canales", device: "phone" })), [], "settings");
+  throwFetch = true;
+  assert.deepEqual(drops(await ui.screen({ route: { name: "main" }, state: {}, device: "phone" })), [], "error");
+});
+
+test("mainView: the flat grid is capped and shows an overflow hint when a tab has more than the cap", () => {
+  const list = Array.from({ length: 65 }, (_, i) => ({ id: `tudn-${i}-en-vivo`, title: `TUDN ${i}` }));
+  const v = ui.mainView({ list, tab: "all", device: "phone" });
+  const grid = findByType(v, "titleGrid");
+  assert.ok(grid.items.length <= 60, "grid capped at 60, was " + grid.items.length);
+  const hint = JSON.stringify(v);
+  assert.ok(/65|primeros|first/i.test(hint), "shows an overflow hint");
 });

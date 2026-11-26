@@ -4,7 +4,9 @@ import { t, twin } from "./i18n.js";
 import { allChannels, usedGroups, inGroup, GROUP, fold, settingsStatus, action } from "./site.js";
 
 const ROUTES = ["main", "search", "settings"];
-const GRID_CAP = 120;
+// A flat titleGrid inside a scroll is drawn all at once and Kino keeps at most 60 titles; past that we cap and hint
+// (the rest stay reachable through the group tabs).
+const GRID_CAP = 60;
 
 // ---- pieces -----------------------------------------------------------------------------------------------------
 
@@ -59,6 +61,8 @@ export function mainView({ list, tab, device }) {
     : tv
       ? { type: "Row", key: "channels", wrap: true, gap: 24, children: channels.slice(0, GRID_CAP).map(roundChannel) }
       : { type: "titleGrid", key: "grid-" + active, columns: { compact: 3, expanded: 6 }, items: channels.slice(0, GRID_CAP).map(channelCard) };
+  const content = [body];
+  if (channels.length > GRID_CAP) content.push({ type: "Text", ...twin("more", "text", { n: GRID_CAP }), style: "caption", color: "muted" });
   return {
     type: "Scaffold",
     appBar: {
@@ -66,6 +70,7 @@ export function mainView({ list, tab, device }) {
       mergeWithKinoBar: true,
       dense: true,
       divider: false,
+      leading: barBtn("close", "close", "close", { go: { close: true } }),
       title: brand(),
       actions: [barBtn("searchBtn", "search", "search", { event: "go", arg: "search" }), barBtn("settingsBtn", "settings", "settings", { event: "go", arg: "settings" })],
     },
@@ -74,7 +79,7 @@ export function mainView({ list, tab, device }) {
       key: "page",
       children: [
         { type: "Column", key: "tabsRow", padding: { compact: 0, expanded: 24 }, children: [tabBar(active, tabs)] },
-        { type: "SingleChildScrollView", key: "browse-" + active, flex: 1, children: [{ type: "Column", padding: { compact: 12, expanded: 24 }, gap: 16, children: [body] }] },
+        { type: "SingleChildScrollView", key: "browse-" + active, flex: 1, children: [{ type: "Column", padding: { compact: 12, expanded: 24 }, gap: 16, children: content }] },
       ],
     },
   };
@@ -124,9 +129,9 @@ export function settingsView({ info, device }) {
 function errorView() {
   return {
     type: "Scaffold",
-    appBar: { type: "AppBar", mergeWithKinoBar: true, dense: true, divider: false, title: brand() },
+    appBar: { type: "AppBar", mergeWithKinoBar: true, dense: true, divider: false, leading: barBtn("close", "close", "close", { go: { close: true } }), title: brand() },
     body: scroll("error-page", [
-      { type: "MaterialBanner", key: "loadFailed", role: "error", ...twin("siteDown"), action: { ...twin("retry", "label"), onTap: "retry" } },
+      { type: "MaterialBanner", key: "loadFailed", role: "error", ...twin("siteDown", "text"), action: { ...twin("retry", "label"), onTap: "retry" } },
     ]),
   };
 }
@@ -155,6 +160,13 @@ const pickStr = (value, arg) => (typeof value === "string" ? value : typeof arg 
 const events = {
   tab({ value, arg, state }) { return { state: { ...state, tab: pickStr(value, arg) || "all", ...bump(state) } }; },
   q({ value, arg, state }) { return { state: { ...state, q: pickStr(value, arg), ...bump(state) } }; },
+  // Navigate between this screen's own routes: the app-bar buttons push "search"/"settings", the back button pops to "main".
+  go({ value, arg }) {
+    const to = pickStr(value, arg);
+    if (to === "search" || to === "settings") return { route: { push: to } };
+    if (to === "main") return { route: { pop: true } };
+    return null;
+  },
   retry({ state }) { return { state: { ...state, ...bump(state) } }; },
   async check({ state }) { const r = await action("check"); return { toast: { text: r.message }, state: { ...state, ...bump(state) } }; },
   async clearCache({ state }) { const r = await action("clearCache"); return { toast: { text: r.message }, state: { ...state, ...bump(state) } }; },
