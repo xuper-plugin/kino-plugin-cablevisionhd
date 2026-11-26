@@ -125,63 +125,17 @@ async function liveSearch({ query } = {}) {
   if (q.length < 2) return { items: [] };
   return { items: (await allChannels()).filter((c) => fold(c.title).includes(q)).map((c) => toChannel(c)) };
 }
-var liveItem = (c) => {
-  const it = { id: c.id, ref: c.id, title: c.title, kind: "live" };
-  if (c.logo) it.poster = c.logo;
-  return it;
-};
-var inGroup = (list, groupId) => list.filter((c) => categoriesOf(c.title).includes(groupId));
-var GROUP = (id) => CATEGORIES.find((c) => c.id === id);
-var usedGroups = (list) => CATEGORIES.filter((g) => inGroup(list, g.id).length);
-function rowOf(list, group) {
-  const items = inGroup(list, group.id).slice(0, 20).map(liveItem);
-  return items.length ? { id: group.id, title: t(group.key), items, ref: "cat:" + group.id, genre: group.genre } : null;
-}
-async function home() {
-  const list = await allChannels();
-  return usedGroups(list).slice(0, 6).map((g) => rowOf(list, g)).filter(Boolean);
-}
-async function browse(ref) {
-  const m = /^cat:([a-z]+)$/.exec(String(ref || ""));
-  const group = m && GROUP(m[1]);
-  if (!group) return { items: [] };
-  return { items: inGroup(await allChannels(), group.id).map(liveItem) };
-}
 async function search(arg) {
-  const query = typeof arg === "string" ? { q: arg } : arg || {};
-  const q = fold(query.q);
+  const q = fold(typeof arg === "string" ? arg : arg && arg.q || "");
   if (q.length < 2) return [];
-  let list = await allChannels();
-  if (query.within) {
-    const m = /^cat:([a-z]+)$/.exec(String(query.within));
-    if (!m || !GROUP(m[1])) return null;
-    list = inGroup(list, m[1]);
-  }
-  return list.filter((c) => fold(c.title).includes(q)).slice(0, 60).map(liveItem);
-}
-async function section({ tab } = {}) {
-  const list = await allChannels();
-  const groups = usedGroups(list);
-  const tabs = [{ id: "todos", label: t("all") }, ...groups.map((g) => ({ id: g.id, label: t(g.key) }))];
-  const chosen = tabs.some((x) => x.id === tab) ? tab : "todos";
-  const rows = (chosen === "todos" ? groups.map((g) => rowOf(list, g)) : [rowOf(list, GROUP(chosen))]).filter(Boolean);
-  const answer = { tabs, tab: chosen, rows };
-  const first = rows.flatMap((r) => r.items)[0];
-  if (first) {
-    answer.hero = { title: first.title, text: t("heroText") };
-    if (first.poster) answer.hero.image = first.poster;
-  }
-  return answer;
-}
-async function categories() {
-  const list = await allChannels();
-  return usedGroups(list).map((g) => {
-    const first = inGroup(list, g.id)[0];
-    const tile = { id: "g-" + g.id, title: t(g.key), ref: "cat:" + g.id };
-    if (first && first.logo) tile.art = first.logo;
-    return tile;
+  return (await allChannels()).filter((c) => fold(c.title).includes(q)).slice(0, 60).map((c) => {
+    const it = { id: c.id, ref: c.id, title: c.title, kind: "live" };
+    if (c.logo) it.poster = c.logo;
+    return it;
   });
 }
+var inGroup = (list, groupId) => list.filter((c) => categoriesOf(c.title).includes(groupId));
+var usedGroups = (list) => CATEGORIES.filter((g) => inGroup(list, g.id).length);
 async function settingsStatus() {
   try {
     return { info: t("statusOk").replace("{n}", String((await allChannels()).length)) };
@@ -434,12 +388,13 @@ async function screen(ctx) {
   }
 }
 var bump = (state) => ({ n: (state.n || 0) + 1 });
+var pickStr = (value, arg) => typeof value === "string" ? value : typeof arg === "string" ? arg : "";
 var events = {
-  tab({ value, state }) {
-    return { state: { ...state, tab: typeof value === "string" ? value : "all", ...bump(state) } };
+  tab({ value, arg, state }) {
+    return { state: { ...state, tab: pickStr(value, arg) || "all", ...bump(state) } };
   },
-  q({ value, state }) {
-    return { state: { ...state, q: typeof value === "string" ? value : "", ...bump(state) } };
+  q({ value, arg, state }) {
+    return { state: { ...state, q: pickStr(value, arg), ...bump(state) } };
   },
   retry({ state }) {
     return { state: { ...state, ...bump(state) } };
@@ -471,9 +426,6 @@ async function screenEvent(ev) {
 globalThis.__kinoDropPendingFetches = true;
 export {
   action,
-  browse,
-  categories,
-  home,
   liveCategories,
   liveChannels,
   liveSearch,
@@ -481,6 +433,5 @@ export {
   screen,
   screenEvent,
   search,
-  section,
   settingsStatus
 };

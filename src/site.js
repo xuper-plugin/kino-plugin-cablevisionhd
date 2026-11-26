@@ -140,65 +140,23 @@ export async function liveSearch({ query } = {}) {
   return { items: (await allChannels()).filter((c) => fold(c.title).includes(q)).map((c) => toChannel(c)) };
 }
 
+// Global search: the plugin's channels show up in Kino's own search, as live items.
+export async function search(arg) {
+  const q = fold(typeof arg === "string" ? arg : (arg && arg.q) || "");
+  if (q.length < 2) return [];
+  return (await allChannels()).filter((c) => fold(c.title).includes(q)).slice(0, 60).map((c) => {
+    const it = { id: c.id, ref: c.id, title: c.title, kind: "live" };
+    if (c.logo) it.poster = c.logo;
+    return it;
+  });
+}
+
 // ---- group helpers (shared with the plugin's own screen) ------------------------------------------------------
 
-const liveItem = (c) => { const it = { id: c.id, ref: c.id, title: c.title, kind: "live" }; if (c.logo) it.poster = c.logo; return it; };
 export const inGroup = (list, groupId) => list.filter((c) => categoriesOf(c.title).includes(groupId));
 export const GROUP = (id) => CATEGORIES.find((c) => c.id === id);
 /** The groups that have a channel today: a tab or a tile with nothing in it would only say so. */
 export const usedGroups = (list) => CATEGORIES.filter((g) => inGroup(list, g.id).length);
-
-function rowOf(list, group) {
-  const items = inGroup(list, group.id).slice(0, 20).map(liveItem);
-  return items.length ? { id: group.id, title: t(group.key), items, ref: "cat:" + group.id, genre: group.genre } : null;
-}
-
-export async function home() {
-  const list = await allChannels();
-  return usedGroups(list).slice(0, 6).map((g) => rowOf(list, g)).filter(Boolean);
-}
-
-export async function browse(ref) {
-  const m = /^cat:([a-z]+)$/.exec(String(ref || ""));
-  const group = m && GROUP(m[1]);
-  if (!group) return { items: [] };
-  return { items: inGroup(await allChannels(), group.id).map(liveItem) };
-}
-
-export async function search(arg) {
-  const query = typeof arg === "string" ? { q: arg } : (arg || {});
-  const q = fold(query.q);
-  if (q.length < 2) return [];
-  let list = await allChannels();
-  if (query.within) {
-    const m = /^cat:([a-z]+)$/.exec(String(query.within));
-    if (!m || !GROUP(m[1])) return null; // Kino filters the page it already has
-    list = inGroup(list, m[1]);
-  }
-  return list.filter((c) => fold(c.title).includes(q)).slice(0, 60).map(liveItem);
-}
-
-export async function section({ tab } = {}) {
-  const list = await allChannels();
-  const groups = usedGroups(list);
-  const tabs = [{ id: "todos", label: t("all") }, ...groups.map((g) => ({ id: g.id, label: t(g.key) }))];
-  const chosen = tabs.some((x) => x.id === tab) ? tab : "todos";
-  const rows = (chosen === "todos" ? groups.map((g) => rowOf(list, g)) : [rowOf(list, GROUP(chosen))]).filter(Boolean);
-  const answer = { tabs, tab: chosen, rows };
-  const first = rows.flatMap((r) => r.items)[0];
-  if (first) { answer.hero = { title: first.title, text: t("heroText") }; if (first.poster) answer.hero.image = first.poster; }
-  return answer;
-}
-
-export async function categories() {
-  const list = await allChannels();
-  return usedGroups(list).map((g) => {
-    const first = inGroup(list, g.id)[0];
-    const tile = { id: "g-" + g.id, title: t(g.key), ref: "cat:" + g.id };
-    if (first && first.logo) tile.art = first.logo;
-    return tile;
-  });
-}
 
 // ---- Ajustes ▸ CablevisionHD ----
 

@@ -1,11 +1,11 @@
 {
   "id": "cablevisionhd",
   "name": "CablevisionHD",
-  "version": "0.4.0",
-  "apiVersion": 9,
+  "version": "0.5.0",
+  "apiVersion": 14,
   "entry": "plugin.js",
   "icon": "icon.png",
-  "description": "TV en vivo de CablevisionHD: unos 70 canales de deportes, entretenimiento, noticias, películas, infantil y educación, con sección propia, categorías, búsqueda y varias opciones de señal por canal.",
+  "description": "TV en vivo de CablevisionHD: unos 70 canales de deportes, entretenimiento, noticias, películas, infantil y educación, con pantalla propia (pestañas por grupo, búsqueda y ajustes) y varias opciones de señal por canal.",
   "author": "xuper-plugin",
   "homepage": "https://github.com/xuper-plugin/kino-plugin-cablevisionhd",
   "hosts": [
@@ -18,22 +18,28 @@
   ],
   "capabilities": [
     "channels",
-    "home",
-    "browse",
+    "resolve",
     "search",
-    "scopedSearch",
-    "resolve"
+    "screen"
   ],
+  "screen": {
+    "label": "CablevisionHD",
+    "labelEn": "CablevisionHD",
+    "icon": "tv",
+    "menuOpens": "screen",
+    "opensFrom": ["menu", "settings"],
+    "settingsIn": "screen",
+    "settingsButton": {
+      "label": "Abrir CablevisionHD",
+      "labelEn": "Open CablevisionHD"
+    }
+  },
   "liveStreamHosts": "any",
   "streamHosts": "any",
   "categories": [
     "live"
   ],
   "color": "#E11D48",
-  "section": {
-    "label": "TV en vivo",
-    "labelEn": "Live TV"
-  },
   "theme": {
     "accent": "#BE185D",
     "onAccent": "#FFFFFF",
@@ -87,26 +93,6 @@
       "default": true,
       "hint": "Salta las opciones apagadas; tarda un poco más.",
       "hintEn": "Skips options that are off air; takes a little longer."
-    },
-    {
-      "key": "info",
-      "type": "status",
-      "label": "Estado",
-      "labelEn": "Status"
-    },
-    {
-      "key": "check",
-      "type": "action",
-      "label": "Actualizar la parrilla",
-      "labelEn": "Refresh the grid"
-    },
-    {
-      "key": "clearCache",
-      "type": "action",
-      "label": "Vaciar caché",
-      "labelEn": "Clear cache",
-      "confirm": "¿Vaciar la lista de canales guardada?",
-      "confirmEn": "Clear the saved channel list?"
     }
   ],
   "telemetry": true

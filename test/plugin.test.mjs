@@ -67,12 +67,16 @@ const installChannel = (slug, canal, host, opts = 3) => {
   }
 };
 
-test("the manifest passes the kit's contract check and declares the channel and player hosts", () => {
+test("the manifest declares the new-UI capabilities (channels, resolve, screen), the screen block, v0.5.0 and the player hosts", () => {
   const text = readFileSync(new URL("../kino-plugin.json", import.meta.url), "utf8");
   const m = JSON.parse(text);
   const v = validateManifest(text);
   assert.ok(!v.errors?.length && v.ok !== false, JSON.stringify(v));
-  assert.ok(m.capabilities.includes("channels") && m.liveStreamHosts === "any");
+  for (const cap of ["channels", "resolve", "search", "screen"]) assert.ok(m.capabilities.includes(cap), cap);
+  for (const gone of ["home", "browse", "scopedSearch"]) assert.ok(!m.capabilities.includes(gone), "dropped: " + gone);
+  assert.ok(m.screen && m.screen.menuOpens === "screen" && m.screen.settingsIn === "screen");
+  assert.equal(m.version, "0.5.0");
+  assert.equal(m.liveStreamHosts, "any");
   for (const h of ["www.cablevisionhd.org", "cablevisionhd.org", "deportes.ksdjugfssddeports.com", "regionales.saohgdassregions.com"]) assert.ok(m.hosts.includes(h), h);
 });
 
@@ -117,6 +121,15 @@ test("liveSearch: accent-blind, needs two letters", async () => {
   assert.deepEqual((await plugin.liveSearch({ query: "e" })).items, []);
   assert.deepEqual((await plugin.liveSearch({ query: "ESPN" })).items.map((i) => i.id), ["espn-2-en-vivo"]);
   assert.deepEqual((await plugin.liveSearch({ query: "télefe" })).items.map((i) => i.id), ["telefe-en-vivo"]);
+});
+
+test("search (global): live items by name, accent-blind, needs two letters", async () => {
+  install();
+  assert.deepEqual(await plugin.search("e"), []);
+  const r = await plugin.search("télefe");
+  assert.deepEqual(r.map((i) => i.id), ["telefe-en-vivo"]);
+  assert.equal(r[0].kind, "live");
+  assert.equal(r[0].ref, "telefe-en-vivo");
 });
 
 test("resolve: follows page -> option -> player and returns the playlist, with the other options as alternatives", async () => {
@@ -187,64 +200,6 @@ test("resolve: when every option is off air the person gets the sentence, not a 
 
 const GRID2 = `<html><body>${[["tudn-en-vivo", "TUDN"], ["espn-en-vivo", "ESPN"], ["espn-2-en-vivo", "ESPN 2"], ["fox-sports-en-vivo", "FOX SPORTS"], ["telefe-en-vivo", "TELEFE"], ["caracol-en-vivo", "CARACOL"], ["cartoon-network-en-vivo", "CARTOON NETWORK"], ["discovery-channel-en-vivo", "DISCOVERY CHANNEL"]].map(([slug, name]) => card(slug, name, `imge/${slug}.webp`)).join("")}</body></html>`;
 const installGrid = () => { pages[BASE + "/"] = { body: GRID2 }; };
-
-test("home: a row per group that has channels, each channel a live item with its logo and a Ver más to its group", async () => {
-  installGrid();
-  const rows = await plugin.home();
-  assert.deepEqual(rows.map((r) => r.id), ["sports", "entertainment", "kids", "education"]);
-  assert.deepEqual(rows[0].items.map((i) => i.title), ["TUDN", "ESPN", "ESPN 2", "FOX SPORTS"]);
-  assert.equal(rows[0].items[0].kind, "live");
-  assert.equal(rows[0].items[0].ref, "tudn-en-vivo");
-  assert.equal(rows[0].items[0].poster, BASE + "/imge/tudn-en-vivo.webp");
-  assert.match(rows[0].items[0].id, /^[A-Za-z0-9._~-]{1,128}$/);
-  assert.equal(rows[0].ref, "cat:sports");
-  assert.equal(rows[0].genre, "deportes");
-  assert.equal(rows[0].title, "Deportes");
-});
-
-test("browse: a group's channels in full; anything else is empty", async () => {
-  installGrid();
-  assert.deepEqual((await plugin.browse("cat:kids")).items.map((i) => i.title), ["CARTOON NETWORK"]);
-  assert.deepEqual((await plugin.browse("cat:nope")).items, []);
-  assert.deepEqual((await plugin.browse("zz")).items, []);
-});
-
-test("section: tabs only for groups with channels, the first tab shows every row, a tab shows its group, an unknown tab is the first, the hero is the first channel with its logo", async () => {
-  installGrid();
-  const all = await plugin.section({ tab: null });
-  assert.deepEqual(all.tabs.map((x) => x.id), ["todos", "sports", "entertainment", "kids", "education"], "no tab for news, movies or 24/7: none has a channel today");
-  assert.equal(all.tab, "todos");
-  assert.deepEqual(all.rows.map((r) => r.id), ["sports", "entertainment", "kids", "education"]);
-  assert.equal(all.hero.title, "TUDN");
-  assert.equal(all.hero.image, BASE + "/imge/tudn-en-vivo.webp");
-  assert.match(all.hero.text, /Canales de TV en vivo/);
-  const sports = await plugin.section({ tab: "sports" });
-  assert.deepEqual(sports.rows.map((r) => r.id), ["sports"]);
-  assert.equal((await plugin.section({ tab: "nope" })).tab, "todos");
-  assert.equal((await plugin.section({ tab: "always" })).tab, "todos", "a group with nothing in it is not a tab");
-});
-
-test("categories: only the groups with channels, with a channel's logo as the tile's art", async () => {
-  installGrid();
-  const c = await plugin.categories();
-  assert.deepEqual(c.map((x) => x.ref), ["cat:sports", "cat:entertainment", "cat:kids", "cat:education"]);
-  assert.equal(c[0].title, "Deportes");
-  assert.equal(c[0].art, BASE + "/imge/tudn-en-vivo.webp");
-  assert.ok(c.every((x) => /^g-[a-z0-9]+$/.test(x.id)));
-});
-
-test("search: channels by name, accent-blind; inside a group only that group's; an unknown page answers null so Kino filters it", async () => {
-  installGrid();
-  assert.deepEqual((await plugin.search("espn")).map((i) => i.title), ["ESPN", "ESPN 2"]);
-  assert.deepEqual(await plugin.search("e"), []);
-  assert.deepEqual((await plugin.search({ q: "discovery" })).map((i) => i.kind), ["live"]);
-  assert.deepEqual((await plugin.search({ q: "s", within: "cat:sports" })), []);
-  assert.deepEqual((await plugin.search({ q: "fox", within: "cat:sports" })).map((i) => i.title), ["FOX SPORTS"]);
-  assert.deepEqual((await plugin.search({ q: "telefe", within: "cat:sports" })), []);
-  assert.equal(await plugin.search({ q: "telefe", within: "cat:nope" }), null);
-  const m = JSON.parse(readFileSync(new URL("../kino-plugin.json", import.meta.url), "utf8"));
-  assert.ok(["search", "scopedSearch", "browse", "channels"].every((c) => m.capabilities.includes(c)));
-});
 
 test("settings: the preferred option is tried first and the others follow; checking the signal can be switched off", async () => {
   installChannel("tudn-en-vivo", "tudn", "deportes.ksdjugfssddeports.com");

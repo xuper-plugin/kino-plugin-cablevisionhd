@@ -151,9 +151,10 @@ export async function screen(ctx) {
 }
 
 const bump = (state) => ({ n: (state.n || 0) + 1 });
+const pickStr = (value, arg) => (typeof value === "string" ? value : typeof arg === "string" ? arg : "");
 const events = {
-  tab({ value, state }) { return { state: { ...state, tab: typeof value === "string" ? value : "all", ...bump(state) } }; },
-  q({ value, state }) { return { state: { ...state, q: typeof value === "string" ? value : "", ...bump(state) } }; },
+  tab({ value, arg, state }) { return { state: { ...state, tab: pickStr(value, arg) || "all", ...bump(state) } }; },
+  q({ value, arg, state }) { return { state: { ...state, q: pickStr(value, arg), ...bump(state) } }; },
   retry({ state }) { return { state: { ...state, ...bump(state) } }; },
   async check({ state }) { const r = await action("check"); return { toast: { text: r.message }, state: { ...state, ...bump(state) } }; },
   async clearCache({ state }) { const r = await action("clearCache"); return { toast: { text: r.message }, state: { ...state, ...bump(state) } }; },
