@@ -1,8 +1,9 @@
-// Kino plugin: CablevisionHD -- live TV channels from cablevisionhd.com.
-// The site lists its channels on one page (/parrilla-directo.php). A channel page offers up to three options; each option's
-// core.php answers a page with one iframe, and that player page names the HLS playlist in `var src = "...m3u8?token=..."`.
+// Kino plugin: CablevisionHD -- live TV channels from www.cablevisionhd.org.
+// The site lists its channels on its home page (each a "<name>-en-vivo.php" page). A channel page names up to three signal
+// options in a `const SOURCES = {1:"...live/core.php?canal=X", 2:"...live2/...", 3:"...live3/..."}` script object; each core.php
+// answers a page with one iframe, and that player page names the HLS playlist in `var src = "...m3u8?token=..."`.
 
-// www. answers a 301 to this address on every request (one more hop, and one more host to reach), so the plugin goes straight to it.
+// The old apex host (cablevisionhd.com) answers a 301 to www.cablevisionhd.org, so the plugin goes straight to the new host.
 
 // Kino waits for every request a call left running before it delivers the call's answer (quickjs-kt joins the pending async work), so a Home that
 // gave up on a slow row at its own budget was still held until that row's request ended, or retried: measured on users' devices Home ran 21-34 s
@@ -10,7 +11,7 @@
 // leaves running (the prelude reads this flag after every call; Kino 0.9.55 and later, an older one ignores it) lets the answer leave at the budget.
 globalThis.__kinoDropPendingFetches = true;
 
-const BASE = "https://cablevisionhd.com";
+const BASE = "https://www.cablevisionhd.org";
 // The site answers a plain browser; the same User-Agent goes on every request of a resolve.
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:101.0) Gecko/20100101 Firefox/101.0";
 const HLS_MIME = "application/x-mpegURL";
@@ -57,16 +58,18 @@ function categoriesOf(title) {
 
 const decode = (s) => String(s || "").replace(/&amp;/g, "&").replace(/&#0?39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
 
-/** Every channel card of the grid page: `{ id, title, logo }`. A card that is not a channel page ("-ver.php") is left out. */
+/** Every channel card of the home page: `{ id, title, logo }`. A link that is not a channel page ("-en-vivo.php") is left out. */
 function parseChannels(html) {
   const out = [];
   const seen = new Set();
-  for (const m of String(html || "").matchAll(/<a\s+href="([^"]+)"[^>]*class="[^"]*\bchannel-card\b[^"]*"[^>]*>([\s\S]*?)<\/a>/g)) {
-    const slug = /\/([a-z0-9-]+-ver)\.php(?:\?.*)?$/i.exec(m[1]);
+  // Each card is `<a class="channel" href=".../<slug>-en-vivo.php" data-category="...">` with the title in `<div class="channel-name">`.
+  for (const m of String(html || "").matchAll(/<a\s[^>]*class="[^"]*\bchannel\b[^"]*"[^>]*>([\s\S]*?)<\/a>/g)) {
+    const href = (/\bhref="([^"]+)"/.exec(m[0]) || [])[1] || "";
+    const slug = /\/([a-z0-9-]+-en-vivo)\.php(?:\?.*)?$/i.exec(href);
     if (!slug || seen.has(slug[1])) continue;
-    const title = decode((/<p[^>]*>([\s\S]*?)<\/p>/.exec(m[2]) || [])[1] || "").replace(/<[^>]+>/g, "").trim();
+    const title = decode((/<div[^>]*class="[^"]*\bchannel-name\b[^"]*"[^>]*>([\s\S]*?)<\/div>/.exec(m[1]) || [])[1] || "").replace(/<[^>]+>/g, "").trim();
     if (!title) continue;
-    const img = (/<img[^>]*\bsrc="([^"]+)"/.exec(m[2]) || [])[1];
+    const img = (/<img[^>]*\bsrc="([^"]+)"/.exec(m[1]) || [])[1];
     seen.add(slug[1]);
     out.push({ id: slug[1], title, logo: img ? new URL(decode(img), BASE + "/").href : undefined });
   }
@@ -110,8 +113,8 @@ async function allChannels() {
   const fresh = readChannels(CACHE_MS);
   if (fresh) return fresh;
   try {
-    const list = parseChannels(await fetchText(BASE + "/parrilla-directo.php", { Referer: BASE + "/" }));
-    if (!list.length) throw kino.error("unavailable", "CablevisionHD: no channels on the grid page", { userMessage: t("siteDown") });
+    const list = parseChannels(await fetchText(BASE + "/", { Referer: BASE + "/" }));
+    if (!list.length) throw kino.error("unavailable", "CablevisionHD: no channels on the home page", { userMessage: t("siteDown") });
     try { kino.storage.set(CACHE_KEY, JSON.stringify({ at: Date.now(), v: list }), { ttlMs: STALE_MS }); } catch (_) { /* the list is small; a full storage only costs a refetch */ }
     return list;
   } catch (e) {
@@ -231,14 +234,11 @@ export async function action(key) {
 
 // ---- resolve ---------------------------------------------------------------------------------------------------
 
-/** The options of a channel page: the `href` of each `a.option`, absolute. */
+/** The signal options of a channel page: the URLs of the `const SOURCES = {1:"...", 2:"...", 3:"..."}` script object, in order, absolute. */
 function parseOptions(html) {
-  const out = [];
-  for (const m of String(html || "").matchAll(/<a\s[^>]*class="[^"]*\boption\b[^"]*"[^>]*>/g)) {
-    const href = (/\bhref="([^"]+)"/.exec(m[0]) || [])[1];
-    if (href) out.push(new URL(decode(href), BASE + "/").href);
-  }
-  return [...new Set(out)];
+  const block = (/const\s+SOURCES\s*=\s*\{([\s\S]*?)\}/.exec(String(html || "")) || [])[1] || "";
+  const pairs = [...block.matchAll(/(\d+)\s*:\s*"([^"]+)"/g)].map((m) => [Number(m[1]), m[2].replace(/\\\//g, "/")]).sort((a, b) => a[0] - b[0]);
+  return [...new Set(pairs.map((p) => new URL(decode(p[1]), BASE + "/").href))];
 }
 
 /** The player iframe of an option's core.php. */
@@ -312,13 +312,13 @@ function firstOpening(order, run) {
   });
 }
 
-/** `ref` is a channel id ("tudn-ver"), or "<id>|<n>" for the n-th option of that channel. */
+/** `ref` is a channel id ("tudn-en-vivo"), or "<id>|<n>" for the n-th option of that channel. */
 export async function resolve(ref) {
-  const m = /^([a-z0-9-]+-ver)(?:\|([1-9]))?$/i.exec(String(ref || ""));
+  const m = /^([a-z0-9-]+-en-vivo)(?:\|([1-9]))?$/i.exec(String(ref || ""));
   if (!m) throw kino.error("not_found", "unknown ref: " + ref);
   const deadline = Date.now() + RESOLVE_MS;
   const channelUrl = `${BASE}/${m[1]}.php`;
-  const options = parseOptions(await fetchText(channelUrl, { Referer: BASE + "/parrilla-directo.php" }, { deadline })).slice(0, MAX_OPTIONS);
+  const options = parseOptions(await fetchText(channelUrl, { Referer: BASE + "/" }, { deadline })).slice(0, MAX_OPTIONS);
   if (!options.length) throw kino.error("not_found", "no options on " + channelUrl, { userMessage: t("noStream") });
   // Ajustes ▸ CablevisionHD: the signal option to try first (the others follow), unless the person asked for one in particular
   const preferred = Number(setting("option", "auto"));

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- The site moved from `cablevisionhd.com` to `www.cablevisionhd.org` and changed its shape, so every channel stopped working: the grid is now the home page (the old `/parrilla-directo.php` is gone), each channel card is `<a class="channel" href=".../<name>-en-vivo.php">` with its title in `<div class="channel-name">` (was `channel-card` with a `<p>`), and a channel page lists its signals in a `const SOURCES = {1:".../live/core.php?canal=X", 2:".../live2/...", 3:".../live3/..."}` script object (was `<a class="option">`). The plugin follows the new host and shape; the player hosts (`deportes.*`, `regionales.*`) and the `var src` playlist did not change, so resolving still works once the new signal URLs are read. The `.org` hosts are added to the manifest.
+  / El sitio pasó de `cablevisionhd.com` a `www.cablevisionhd.org` y cambió de forma, y todos los canales dejaron de funcionar: la parrilla es ahora la portada, cada tarjeta es `<a class="channel" href=".../<nombre>-en-vivo.php">` con el título en `<div class="channel-name">`, y la página de canal lista sus señales en un objeto `const SOURCES = {…}`. El plugin sigue el host y la forma nuevos; los hosts del reproductor y el `var src` no cambiaron.
+
+## 0.3.4
+
+- The manifest declares `streamHosts: "any"`, so a channel whose playlist lives on a host not listed in the manifest still plays.
+  / El manifiesto declara `streamHosts: "any"`, para que un canal cuyo m3u8 vive en un host no listado igual reproduzca.
+
 ## 0.3.3
 
 - Entertainment, news, movie and kids channels play again. Their signal host (`regionales.*`) answers "Embedding domain not allowed" unless the player is fetched with the exact `core.php` page that embeds it as the `Referer`; the plugin was sending the site's home page, so only the sports host (`deportes.*`, lenient) resolved. It now sends the embedding page, the Referer a browser sends, and both signal hosts play.

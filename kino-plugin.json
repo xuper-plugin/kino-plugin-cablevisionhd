@@ -1,7 +1,7 @@
 {
   "id": "cablevisionhd",
   "name": "CablevisionHD",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "apiVersion": 9,
   "entry": "plugin.js",
   "icon": "icon.png",
@@ -9,6 +9,8 @@
   "author": "xuper-plugin",
   "homepage": "https://github.com/xuper-plugin/kino-plugin-cablevisionhd",
   "hosts": [
+    "www.cablevisionhd.org",
+    "cablevisionhd.org",
     "cablevisionhd.com",
     "www.cablevisionhd.com",
     "deportes.ksdjugfssddeports.com",
