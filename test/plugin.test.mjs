@@ -26,7 +26,7 @@ globalThis.kino = {
   log: (...a) => logs.push(a.join(" ")),
   error: (code, message, opts = {}) => Object.assign(new Error(message), { code, ...opts }),
 };
-const plugin = await import("../plugin.js");
+const plugin = await import("../src/plugin.js");
 
 beforeEach(() => { calls.length = 0; pages = {}; logs = []; store = new Map(); lang = "es"; cfg = {}; });
 

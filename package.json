@@ -3,7 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "esbuild src/plugin.js --bundle --format=esm --target=es2020 --outfile=plugin.js",
     "test": "node --test test/*.test.mjs",
-    "validate": "node sdk/validate.mjs . --repo xuper-plugin/kino-plugin-cablevisionhd"
+    "validate": "npm run build && node sdk/validate.mjs . --repo xuper-plugin/kino-plugin-cablevisionhd"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0"
   }
 }

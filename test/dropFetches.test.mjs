@@ -4,6 +4,6 @@ import assert from "node:assert/strict";
 
 test("the plugin asks Kino to drop the requests a call leaves running", async () => {
   delete globalThis.__kinoDropPendingFetches;
-  await import("../plugin.js?src=" + Date.now());
+  await import("../src/plugin.js?src=" + Date.now());
   assert.equal(globalThis.__kinoDropPendingFetches, true);
 });
